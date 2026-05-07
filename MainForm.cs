@@ -16,13 +16,14 @@ namespace MediComOCR
         private readonly Panel _headerPanel;
         private readonly Label _titleLabel;
         private readonly Label _subtitleLabel;
-        private readonly Button _browseButton;
+        private readonly string _ocrFilePath;
         private readonly Label _fileLabel;
         private readonly RichTextBox _outputText;
         private readonly Label _statusLabel;
 
-        public MainForm()
+        public MainForm(string ocrFilePath)
         {
+            _ocrFilePath = ocrFilePath;
             Text = "MediCom OCR";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(900, 620);
@@ -58,32 +59,19 @@ namespace MediComOCR
             _headerPanel.Controls.Add(_titleLabel);
             _headerPanel.Controls.Add(_subtitleLabel);
 
-            _browseButton = new Button
-            {
-                Text = "Browse súbor",
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.White,
-                ForeColor = Color.FromArgb(34, 73, 255),
-                Font = new Font("Segoe UI Semibold", 10.5f, FontStyle.Bold),
-                Width = 170,
-                Height = 42,
-                Location = new Point(30, 145),
-                Cursor = Cursors.Hand
-            };
-            _browseButton.FlatAppearance.BorderSize = 0;
-            _browseButton.Click += async (_, __) => await BrowseAndExtractAsync();
-
             _fileLabel = new Label
             {
-                Text = "Vyberte súbor JPG/PNG/BMP.",
+                Text = string.IsNullOrWhiteSpace(_ocrFilePath)
+                    ? "OCR súbor nebol zadaný ako parameter."
+                    : $"Súbor: {Path.GetFileName(_ocrFilePath)}",
                 ForeColor = Color.FromArgb(90, 95, 110),
                 AutoSize = true,
-                Location = new Point(215, 156)
+                Location = new Point(30, 156)
             };
 
             _outputText = new RichTextBox
             {
-                Location = new Point(30, 200),
+                Location = new Point(30, 190),
                 Width = 944,
                 Height = 420,
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
@@ -105,48 +93,55 @@ namespace MediComOCR
             };
 
             Controls.Add(_headerPanel);
-            Controls.Add(_browseButton);
             Controls.Add(_fileLabel);
             Controls.Add(_outputText);
             Controls.Add(_statusLabel);
 
             Resize += (_, __) => _statusLabel.Location = new Point(30, ClientSize.Height - 28);
+            Shown += async (_, __) => await LoadOcrTextAsync();
         }
 
-        private async Task BrowseAndExtractAsync()
+        public Task<string> GetTransformedTextAsync()
         {
-            using (var dialog = new OpenFileDialog())
+            if (string.IsNullOrWhiteSpace(_ocrFilePath))
             {
-                dialog.Filter = "Image files|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff";
-                dialog.Title = "Vyberte obrázok";
+                throw new InvalidOperationException("OCR súbor nebol zadaný ako parameter hlavného okna.");
+            }
 
-                if (dialog.ShowDialog() != DialogResult.OK)
-                {
-                    return;
-                }
+            return ExtractTextFromImageAsync(_ocrFilePath);
+        }
 
-                _browseButton.Enabled = false;
-                _statusLabel.Text = "Spracovanie obrázka...";
-                _fileLabel.Text = $"Súbor: {Path.GetFileName(dialog.FileName)}";
-                _outputText.Text = string.Empty;
+        private async Task LoadOcrTextAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_ocrFilePath))
+            {
+                _statusLabel.Text = "Chýba parameter súboru.";
+                _outputText.Text = "Zadajte cestu k obrázku ako parameter aplikácie.";
+                return;
+            }
 
-                try
-                {
-                    var text = await ExtractTextFromImageAsync(dialog.FileName);
-                    _outputText.Text = string.IsNullOrWhiteSpace(text)
-                        ? "OCR nenašiel žiadny text."
-                        : text;
-                    _statusLabel.Text = "Hotovo.";
-                }
-                catch (Exception ex)
-                {
-                    _statusLabel.Text = "Chyba pri OCR.";
-                    _outputText.Text = $"OCR sa nepodarilo vykonať.\n\nDetail chyby:\n{ex.Message}";
-                }
-                finally
-                {
-                    _browseButton.Enabled = true;
-                }
+            if (!File.Exists(_ocrFilePath))
+            {
+                _statusLabel.Text = "Súbor neexistuje.";
+                _outputText.Text = $"Zadaný OCR súbor neexistuje:\n{_ocrFilePath}";
+                return;
+            }
+
+            _statusLabel.Text = "Spracovanie obrázka...";
+            _outputText.Text = string.Empty;
+
+            try
+            {
+                var text = await GetTransformedTextAsync();
+                _outputText.Text = string.IsNullOrWhiteSpace(text)
+                    ? "OCR nenašiel žiadny text."
+                    : text;
+                _statusLabel.Text = "Hotovo.";
+            }
+            catch (Exception ex)
+            {
+                _statusLabel.Text = "Chyba pri OCR.";
+                _outputText.Text = $"OCR sa nepodarilo vykonať.\n\nDetail chyby:\n{ex.Message}";
             }
         }
 
