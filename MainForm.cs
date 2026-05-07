@@ -3,6 +3,7 @@ using System.Drawing;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Windows.Globalization;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage;
@@ -149,6 +150,26 @@ namespace MediComOCR
             }
         }
 
+        private static OcrEngine CreatePreferredOcrEngine()
+        {
+            var preferredTags = new[] { "sk-SK", "cs-CZ" };
+
+            foreach (var tag in preferredTags)
+            {
+                var language = new Language(tag);
+                if (OcrEngine.IsLanguageSupported(language))
+                {
+                    var preferredEngine = OcrEngine.TryCreateFromLanguage(language);
+                    if (preferredEngine != null)
+                    {
+                        return preferredEngine;
+                    }
+                }
+            }
+
+            return OcrEngine.TryCreateFromUserProfileLanguages();
+        }
+
         private static async Task<string> ExtractTextFromImageAsync(string path)
         {
             StorageFile file = await StorageFile.GetFileFromPathAsync(path);
@@ -159,10 +180,10 @@ namespace MediComOCR
                     BitmapPixelFormat.Bgra8,
                     BitmapAlphaMode.Ignore);
 
-                OcrEngine ocrEngine = OcrEngine.TryCreateFromUserProfileLanguages();
+                OcrEngine ocrEngine = CreatePreferredOcrEngine();
                 if (ocrEngine == null)
                 {
-                    throw new InvalidOperationException("Nie je dostupný OCR engine pre používateľský jazyk.");
+                    throw new InvalidOperationException("Nie je dostupný OCR engine. Nainštalujte jazykový balík sk-SK alebo cs-CZ vo Windows.");
                 }
 
                 OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
